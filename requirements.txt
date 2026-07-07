@@ -1,0 +1,52 @@
+# LLM
+langchain>=0.3.0
+langchain-core>=0.3.0
+langchain-community>=0.3.0
+langchain-mistralai>=0.2.0
+
+# RAG
+chromadb>=1.0.0
+sentence-transformers>=4.0.0
+langchain-huggingface>=0.1.0
+
+# Embeddings
+transformers>=4.50.0
+torch>=2.7.0
+
+# Whisper (Local)
+openai-whisper>=20250625
+
+# Audio Processing
+ffmpeg-python>=0.2.0
+pydub>=0.25.1
+
+# YouTube Audio Download
+yt-dlp>=2025.6.30
+
+# Language Detection / Translation
+langdetect>=1.0.9
+deep-translator>=1.11.4
+
+# PDF Export
+reportlab>=4.2.0
+
+# Environment Variables
+python-dotenv>=1.1.0
+
+# API / Backend
+fastapi>=0.116.0
+uvicorn>=0.35.0
+
+# Data Validation
+pydantic>=2.11.0
+
+# Utilities
+numpy>=2.3.0
+tqdm>=4.67.0
+requests>=2.32.0
+
+# Token Counting
+tiktoken>=0.10.0
+
+# Optional Logging
+loguru>=0.7.3
