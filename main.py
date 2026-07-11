@@ -8,6 +8,14 @@ from core.summarize import summarize, generate_title
 from core.extractor import extract_action_items, extract_key_decisions, extract_questions
 from core.rag_engine import build_rag_chain, ask_question
 
+
+def prompt_for_input(prompt: str) -> str:
+    try:
+        return input(prompt).strip()
+    except EOFError:
+        print("\nNo interactive input was provided. Exiting gracefully.")
+        raise SystemExit(0)
+
 def run_pipeline(source :str,translate:bool) -> dict:
     print("starting AI Video Assistant")
 
@@ -39,8 +47,8 @@ def run_pipeline(source :str,translate:bool) -> dict:
 
 if __name__ == "__main__":
     # CLI entry point
-    source = input("Enter YouTube URL or local file path: ").strip()
-    translate = input("Translate to English? (y/n): ").strip().lower() == "y"
+    source = prompt_for_input("Enter YouTube URL or local file path: ")
+    translate = prompt_for_input("Translate to English? (y/n): ").lower() == "y"
     result = run_pipeline(source, translate=translate)
 
     print("\n" + "=" * 60)
@@ -55,7 +63,7 @@ if __name__ == "__main__":
     print("\n💬 Chat with your meeting (type 'exit' to quit)\n")
     rag_chain = result["rag_chain"]
     while True:
-        question = input("You: ").strip()
+        question = prompt_for_input("You: ")
         if question.lower() in ["exit", "quit", "q"]:
             print("👋 Goodbye!")
             break
