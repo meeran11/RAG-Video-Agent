@@ -20,10 +20,17 @@ def download_youtube_audio(url :str) ->str:
             }
         ],
         "quiet": True,
+        "noplaylist": True,
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["android", "tv_embedded"],
+            }
+        },
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)
-        filename = ydl.prepare_filename(info).replace(".webm", ".wav").replace(".m4a", ".wav")
+        filename = ydl.prepare_filename(info)
+        filename = os.path.splitext(filename)[0] + ".wav"
     return filename
 
 #Converts any audio/video file to wav format using pydub because whisper requires monoaudio and 16khz audio

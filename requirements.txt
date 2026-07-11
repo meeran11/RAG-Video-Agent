@@ -50,3 +50,5 @@ tiktoken>=0.10.0
 
 # Optional Logging
 loguru>=0.7.3
+
+python-dotenv>=1.1.0

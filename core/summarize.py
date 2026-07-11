@@ -35,7 +35,7 @@ def summarize(transcript:str)->str:
 
     chunks = split_transcript(transcript)
 
-    chunk_summaries = [chain.invoke({"text",chunk}) for chunk in chunks]
+    chunk_summaries = [chain.invoke({"text":chunk}) for chunk in chunks]
 
     summary = "\n\n".join(chunk_summaries)
 
