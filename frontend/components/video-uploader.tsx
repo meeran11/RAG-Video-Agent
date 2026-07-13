@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Upload, Link as LinkIcon, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { uploadVideo, addVideoFromUrl } from '@/lib/api';
 
 interface VideoUploaderProps {
   onVideoAdded: (video: any) => void;
@@ -13,56 +14,40 @@ export function VideoUploader({ onVideoAdded }: VideoUploaderProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [urlInput, setUrlInput] = useState('');
   const [mode, setMode] = useState<'upload' | 'url'>('upload');
+  const [error, setError] = useState<string | null>(null);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setIsLoading(true);
+    setError(null);
     try {
-      // Simulate file upload - replace with actual API call
-      const reader = new FileReader();
-      reader.onload = () => {
-        const video = {
-          id: `video-${Date.now()}`,
-          name: file.name,
-          duration: '0:00',
-          size: (file.size / (1024 * 1024)).toFixed(2),
-          type: 'uploaded',
-          status: 'processing',
-          uploadedAt: new Date().toLocaleDateString(),
-        };
-        onVideoAdded(video);
-        setIsLoading(false);
-      };
-      reader.readAsArrayBuffer(file);
-    } catch (error) {
-      console.error('Upload failed:', error);
+      const video = await uploadVideo(file);
+      onVideoAdded(video);
+    } catch (err) {
+      console.error('Upload failed:', err);
+      setError(err instanceof Error ? err.message : 'Upload failed');
+    } finally {
       setIsLoading(false);
+      e.target.value = '';
     }
   };
 
-  const handleUrlSubmit = () => {
+  const handleUrlSubmit = async () => {
     if (!urlInput.trim()) return;
 
     setIsLoading(true);
+    setError(null);
     try {
-      // Simulate URL processing - replace with actual API call
-      const video = {
-        id: `video-${Date.now()}`,
-        name: new URL(urlInput).hostname || 'Video from URL',
-        duration: '0:00',
-        url: urlInput,
-        type: 'url',
-        status: 'processing',
-        uploadedAt: new Date().toLocaleDateString(),
-      };
+      const video = await addVideoFromUrl(urlInput.trim());
       onVideoAdded(video);
       setUrlInput('');
-      setIsLoading(false);
       setMode('upload');
-    } catch (error) {
-      console.error('URL processing failed:', error);
+    } catch (err) {
+      console.error('URL processing failed:', err);
+      setError(err instanceof Error ? err.message : 'URL processing failed');
+    } finally {
       setIsLoading(false);
     }
   };
@@ -138,6 +123,10 @@ export function VideoUploader({ onVideoAdded }: VideoUploaderProps) {
             )}
           </Button>
         </div>
+      )}
+
+      {error && (
+        <p className="text-xs text-destructive">{error}</p>
       )}
     </div>
   );

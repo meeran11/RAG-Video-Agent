@@ -15,31 +15,61 @@ def get_llm():
 def format_docs(docs):
     return "\n\n".join([doc.page_content for doc in docs])
 
-def build_rag_chain(transcript:str):
 
-    vector_store = build_vector_store(transcript)
+def _system_prompt(summary: str | None = None) -> str:
+    """Builds the system prompt. When a video summary is available it's baked
+    in directly (it's static for a given video, so it doesn't need to be a
+    per-invocation chain variable) so the model always has a grasp of the
+    whole video, not just whatever chunks similarity search happened to
+    retrieve for this one question."""
 
-    retriever = get_retriever(vector_store, k = 4)
+    safe_summary = summary.replace("{", "{{").replace("}", "}}") if summary else None
+
+    summary_block = (
+        f"""
+Overview summary of the entire video/meeting (use this for broad or general
+questions like "what is this video about", "give me an overview", or
+"summarize this"):
+{safe_summary}
+"""
+        if safe_summary
+        else ""
+    )
+
+    return f"""You are an expert video/meeting assistant helping someone understand a video
+they've uploaded.
+
+You have up to two sources of information:
+{summary_block}
+Specific excerpts retrieved from the transcript for this question (use these
+for specific facts, quotes, names, numbers, or details):
+{{context}}
+
+Guidelines:
+- For broad/general questions, answer using the overview summary above.
+- For specific questions, ground your answer in the retrieved excerpts, and use the overview for extra context if helpful.
+- If neither source actually covers what's being asked, say so honestly rather than guessing.
+- Be concise and clear. If quoting someone, mention it explicitly.
+"""
+
+
+def build_rag_chain(transcript: str, collection_name: str | None = None, summary: str | None = None):
+
+    vector_store = (
+        build_vector_store(transcript, collection_name=collection_name)
+        if collection_name
+        else build_vector_store(transcript)
+    )
+
+    retriever = get_retriever(vector_store, k = 6)
 
     llm = get_llm()
 
     prompt = ChatPromptTemplate.from_messages(
-
-        [(
-            "system",
-            """You are an expert meeting assistant. Answer the user's question 
-based ONLY on the meeting transcript context provided below.
-
-If the answer is not found in the context, say: 
-"I could not find this information in the meeting transcript."
-
-Always be concise and precise. If quoting someone, mention it clearly.
-
-Context from meeting transcript:
-{context}""",
-        ),
-        ("human", "{question}"),
-    ]
+        [
+            ("system", _system_prompt(summary)),
+            ("human", "{question}"),
+        ]
     )
 
     #full LCEL Rag pipeline 
@@ -55,25 +85,13 @@ Context from meeting transcript:
     return rag_chain
 
 
-def load_rag_chain():
+def load_rag_chain(summary: str | None = None):
     vector_store = load_vector_store()
-    retriver = get_retriever(vector_store,k=4)
+    retriver = get_retriever(vector_store,k=6)
 
     llm = get_llm()
     prompt = ChatPromptTemplate.from_messages([
-        (
-            "system",
-            """You are an expert meeting assistant. Answer the user's question 
-based ONLY on the meeting transcript context provided below.
-
-If the answer is not found in the context, say: 
-"I could not find this information in the meeting transcript."
-
-Always be concise and precise. If quoting someone, mention it clearly.
-
-Context from meeting transcript:
-{context}""",
-        ),
+        ("system", _system_prompt(summary)),
         ("human", "{question}"),
     ])
 

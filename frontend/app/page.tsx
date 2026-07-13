@@ -1,18 +1,48 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { VideoUploader } from '@/components/video-uploader';
 import { ChatInterface } from '@/components/chat-interface';
 import { VideoList } from '@/components/video-list';
 import { Header } from '@/components/header';
+import { deleteVideo, fetchVideos } from '@/lib/api';
 
 export default function Home() {
   const [videos, setVideos] = useState<any[]>([]);
   const [selectedVideo, setSelectedVideo] = useState<any>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
+  // Load any videos already known to the backend on first mount.
+  useEffect(() => {
+    fetchVideos()
+      .then(setVideos)
+      .catch((err) => console.error('Failed to load videos:', err));
+  }, []);
+
+  // While any video is still processing, poll the backend so status
+  // (and the selected video's data) updates from "processing" to "ready"
+  // without a manual refresh.
+  useEffect(() => {
+    const hasProcessing = videos.some((v) => v.status === 'processing');
+    if (!hasProcessing) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const latest = await fetchVideos();
+        setVideos(latest);
+        setSelectedVideo((prev: any) =>
+          prev ? latest.find((v) => v.id === prev.id) || prev : prev
+        );
+      } catch (err) {
+        console.error('Failed to refresh videos:', err);
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [videos]);
+
   const handleVideoAdded = (video: any) => {
-    setVideos([...videos, video]);
+    setVideos((prev) => [...prev, video]);
     setSelectedVideo(video);
   };
 
@@ -20,10 +50,15 @@ export default function Home() {
     setSelectedVideo(video);
   };
 
-  const handleRemoveVideo = (videoId: string) => {
-    setVideos(videos.filter((v) => v.id !== videoId));
+  const handleRemoveVideo = async (videoId: string) => {
+    setVideos((prev) => prev.filter((v) => v.id !== videoId));
     if (selectedVideo?.id === videoId) {
       setSelectedVideo(null);
+    }
+    try {
+      await deleteVideo(videoId);
+    } catch (err) {
+      console.error('Failed to delete video:', err);
     }
   };
 
