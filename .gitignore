@@ -2,3 +2,6 @@
 downloads/
 .cache/
 uploads/
+vector-db/
+__pycache__/
+*.pyc

@@ -1,0 +1,11 @@
+vector-db/
+.cache/
+__pycache__/
+*.pt
+*.bin
+*.onnx
+*.safetensors
+*.ckpt
+*.pth
+models/
+downloads/
