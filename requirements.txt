@@ -1,59 +1,53 @@
 # LLM
-langchain>=0.3.0
-langchain-core>=0.3.0
-langchain-community>=0.3.0
+langchain>=0.3.27
+langchain-core>=0.3.75
+langchain-community>=0.3.27
 langchain-mistralai>=0.2.0
 
-# RAG
-# chromadb>=1.0.0
-sentence-transformers>=4.0.0
-langchain-huggingface>=0.1.0
+# Vector Database
+qdrant-client>=1.15.0
+langchain-qdrant>=0.2.0
 
 # Embeddings
-transformers>=4.50.0
+sentence-transformers>=4.1.0
+langchain-huggingface>=0.1.2
+transformers>=4.55.0
 torch>=2.7.0
 
-# Whisper (Local)
-openai-whisper>=20250625
+# Whisper
+faster-whisper>=1.1.0
+ctranslate2>=4.6.0
+numba>=0.61.2
+llvmlite>=0.44.0
 
 # Audio Processing
 ffmpeg-python>=0.2.0
 pydub>=0.25.1
 
-# YouTube Audio Download
+# YouTube
 yt-dlp>=2025.6.30
 
-# Language Detection / Translation
+# Translation
 langdetect>=1.0.9
 deep-translator>=1.11.4
 
-# PDF Export
+# PDF
 reportlab>=4.2.0
 
-# Environment Variables
+# Environment
 python-dotenv>=1.1.0
 
-# API / Backend
+# API
 fastapi>=0.116.0
 uvicorn>=0.35.0
 python-multipart>=0.0.32
 
-# Data Validation
+# Validation
 pydantic>=2.11.0
 
 # Utilities
 numpy>=2.3.0
 tqdm>=4.67.0
 requests>=2.32.0
-
-# Token Counting
 tiktoken>=0.10.0
-
-# Optional Logging
 loguru>=0.7.3
-
-python-dotenv>=1.1.0
-
-qdrant-client
-langchain-qdrant
-
