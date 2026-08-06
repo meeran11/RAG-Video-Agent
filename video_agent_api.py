@@ -51,8 +51,7 @@ app = FastAPI(title="VideoRAG API")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
+        "*"
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -94,7 +93,7 @@ def run_pipeline_for_video(video_id: str, source: str, translate: bool = False):
         key_decisions = extract_key_decisions(transcript)
         open_questions = extract_questions(transcript)
 
-        # Give each video its own Chroma collection so answers don't leak
+        # Give each video its own Vector collection so answers don't leak
         # across different videos' content. Also pass the summary in so the
         # assistant can answer broad "what is this about" style questions,
         # not just ones that happen to match a retrieved transcript chunk.
