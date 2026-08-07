@@ -77,24 +77,30 @@ def download_youtube_audio(url: str) -> str:
     output_template = str(DOWNLOAD_DIRECTORY / "%(title)s.%(ext)s")
 
     ydl_opts = {
-        "format": "bestaudio/best",
+        "format": "bestaudio/best[ext=m4a]/bestaudio/best",
         "outtmpl": output_template,
         "noplaylist": True,
         "quiet": False,
         "no_warnings": False,
-        "retries": 15,
-        "fragment_retries": 15,
-        "extractor_retries": 10,
-        "socket_timeout": 120,
+        "retries": 20,
+        "fragment_retries": 20,
+        "extractor_retries": 20,
+        "socket_timeout": 180,
         "geo_bypass": True,
+        "concurrent_fragment_downloads": 2,
+        "hls_prefer_native": True,
+        "extract_flat": False,
+        "skip_unavailable_fragments": True,
         "extractor_args": {
             "youtube": {
                 "player_client": [
                     "android",
-                    "tv_embedded",
                     "web",
-                    "ios",
-                ]
+                ],
+                "player_skip": [
+                    "configs",
+                    "web_player",
+                ],
             }
         },
         "http_headers": {
@@ -113,6 +119,7 @@ def download_youtube_audio(url: str) -> str:
                 "preferredquality": "192",
             }
         ],
+        "writethumbnail": False,
     }
 
     attempts = build_auth_attempts()
