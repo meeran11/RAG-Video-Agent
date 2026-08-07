@@ -46,6 +46,27 @@ def resolve_cookie_file(base_dir: Optional[Path] = None) -> Optional[str]:
     return None
 
 
+def build_auth_attempts(base_dir: Optional[Path] = None) -> list[tuple[str, dict]]:
+    """Build a list of yt-dlp auth strategies to try in order."""
+    attempts: list[tuple[str, dict]] = []
+
+    cookie_file = resolve_cookie_file(base_dir)
+    if cookie_file:
+        attempts.append(("cookiefile", {"cookiefile": cookie_file}))
+
+    configured_browser = os.getenv("YTDLP_COOKIES_FROM_BROWSER")
+    if configured_browser:
+        attempts.append(("cookiesfrombrowser", {"cookiesfrombrowser": (configured_browser,)}))
+    elif os.name == "nt":
+        for browser in ("chrome", "edge", "brave", "firefox"):
+            attempts.append(("cookiesfrombrowser", {"cookiesfrombrowser": (browser,)}))
+
+    if not attempts:
+        logging.info("No cookie-based authentication methods are available.")
+
+    return attempts
+
+
 # ---------------------------
 # Download YouTube Audio
 # ---------------------------
@@ -71,7 +92,8 @@ def download_youtube_audio(url: str) -> str:
                 "player_client": [
                     "android",
                     "tv_embedded",
-                    "web"
+                    "web",
+                    "ios",
                 ]
             }
         },
@@ -80,7 +102,9 @@ def download_youtube_audio(url: str) -> str:
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                 "AppleWebKit/537.36 "
                 "(KHTML, like Gecko) "
-                "Chrome/138.0.0.0 Safari/537.36"
+                "Chrome/138.0.0.0 Safari/537.36",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         },
         "postprocessors": [
             {
@@ -91,37 +115,45 @@ def download_youtube_audio(url: str) -> str:
         ],
     }
 
-    cookie_file = resolve_cookie_file()
-    if cookie_file:
-        logging.info("Using cookie file: %s", cookie_file)
-        ydl_opts["cookiefile"] = cookie_file
-    else:
-        logging.info("No cookie file found; attempting browser-cookie fallback on local machines.")
-        if os.name == "nt":
-            try:
-                ydl_opts["cookiesfrombrowser"] = ("chrome",)
-                logging.info("Using Chrome cookies.")
-            except Exception:
-                pass
+    attempts = build_auth_attempts()
+    if not attempts:
+        logging.info("No auth methods configured; attempting download without cookies.")
+        attempts = [("default", {})]
 
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            downloaded = ydl.prepare_filename(info)
-            wav_path = os.path.splitext(downloaded)[0] + ".wav"
+    last_error: Optional[Exception] = None
+    for attempt_name, auth_opts in attempts:
+        attempt_opts = dict(ydl_opts)
+        attempt_opts.update(auth_opts)
 
-            if not os.path.exists(wav_path):
-                raise FileNotFoundError(f"WAV file not found: {wav_path}")
+        if attempt_name == "cookiefile":
+            logging.info("Trying YouTube download with cookie file auth.")
+        elif attempt_name == "cookiesfrombrowser":
+            logging.info("Trying YouTube download with browser-cookie auth.")
+        else:
+            logging.info("Trying YouTube download with default auth.")
 
-            logging.info("Download successful.")
-            return wav_path
+        try:
+            with yt_dlp.YoutubeDL(attempt_opts) as ydl:
+                info = ydl.extract_info(url, download=True)
+                downloaded = ydl.prepare_filename(info)
+                wav_path = os.path.splitext(downloaded)[0] + ".wav"
 
-    except Exception as e:
-        logging.exception("yt-dlp failed")
-        raise RuntimeError(
-            "Unable to download YouTube audio.\n\n"
-            f"{str(e)}"
-        )
+                if not os.path.exists(wav_path):
+                    raise FileNotFoundError(f"WAV file not found: {wav_path}")
+
+                logging.info("Download successful.")
+                return wav_path
+
+        except Exception as exc:
+            last_error = exc
+            logging.warning("yt-dlp auth attempt %s failed: %s", attempt_name, exc)
+            continue
+
+    logging.exception("yt-dlp failed")
+    raise RuntimeError(
+        "Unable to download YouTube audio.\n\n"
+        f"{str(last_error) if last_error else 'Unknown error'}"
+    )
 
 
 # ---------------------------
