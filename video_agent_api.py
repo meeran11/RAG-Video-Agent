@@ -132,6 +132,13 @@ def start_processing(video_id: str, source: str, translate: bool = False):
 # Videos
 # ----------------------------------------------------------------------
 
+@app.get("/")
+def root():
+    return {
+        "message": "RAG Video Agent API is running!",
+        "docs": "/docs"
+    }
+
 @app.post("/api/videos/upload")
 async def upload_video(file: UploadFile = File(...)):
     video_id = f"video-{uuid.uuid4().hex[:12]}"
