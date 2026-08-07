@@ -127,7 +127,12 @@ def download_youtube_audio(url: str) -> str:
         logging.info("No auth methods configured; attempting download without cookies.")
         attempts = [("default", {})]
 
+    cookie_file = resolve_cookie_file()
+    logging.info("Resolved YouTube cookie file: %s", cookie_file or "<none>")
+    logging.info("YTDLP_COOKIE_FILE env var: %s", os.getenv("YTDLP_COOKIE_FILE") or "<not set>")
+
     last_error: Optional[Exception] = None
+    last_error_text = ""
     for attempt_name, auth_opts in attempts:
         attempt_opts = dict(ydl_opts)
         attempt_opts.update(auth_opts)
@@ -153,13 +158,22 @@ def download_youtube_audio(url: str) -> str:
 
         except Exception as exc:
             last_error = exc
+            last_error_text = str(exc)
             logging.warning("yt-dlp auth attempt %s failed: %s", attempt_name, exc)
             continue
 
     logging.exception("yt-dlp failed")
+
+    if "Sign in to confirm you're not a bot" in last_error_text or "cookies" in last_error_text.lower():
+        raise RuntimeError(
+            "Unable to download YouTube audio because YouTube is blocking the request. "
+            "The hosted environment may not have usable YouTube cookies. "
+            "Please try another video or use a machine with a valid browser session."
+        )
+
     raise RuntimeError(
         "Unable to download YouTube audio.\n\n"
-        f"{str(last_error) if last_error else 'Unknown error'}"
+        f"{last_error_text if last_error_text else 'Unknown error'}"
     )
 
 

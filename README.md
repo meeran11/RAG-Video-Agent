@@ -148,6 +148,7 @@ uvicorn video_agent_api:app --reload --port 8000
 - Processing time depends on the length of the video and the Whisper model size.
 - Large videos may take a while to transcribe and summarize.
 - For the best experience, use a machine with sufficient CPU/GPU resources.
+- On Azure/App Service, YouTube downloads can fail if the app cannot access a valid browser cookie session. In that case, set the environment variable `YTDLP_COOKIE_FILE` to a mounted cookie file or upload a fresh Netscape-format cookies file to the app.
 
 ## 🤝 Contributing
 
