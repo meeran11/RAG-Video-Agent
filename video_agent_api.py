@@ -51,7 +51,8 @@ app = FastAPI(title="VideoRAG API")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://rag-video-agent.vercel.app/"
+        "https://rag-video-agent.vercel.app",
+        "http://localhost:3000",  # optional for local development
     ],
     allow_credentials=True,
     allow_methods=["*"],
