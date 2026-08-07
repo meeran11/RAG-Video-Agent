@@ -14,7 +14,7 @@ faster-whisper>=1.1.0
 
 # Audio processing
 pydub>=0.25.1
-yt-dlp>=2025.6.30
+yt-dlp==2025.6.30
 
 # Environment and API
 python-dotenv>=1.1.0

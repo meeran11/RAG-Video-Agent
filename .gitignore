@@ -5,3 +5,4 @@ uploads/
 vector-db/
 __pycache__/
 *.pyc
+cookies.txt
