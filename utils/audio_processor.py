@@ -1,6 +1,7 @@
 import logging
 import os
 from pathlib import Path
+from typing import Optional
 
 import yt_dlp
 from pydub import AudioSegment
@@ -10,7 +11,40 @@ logging.basicConfig(level=logging.INFO)
 DOWNLOAD_DIRECTORY = Path("downloads")
 DOWNLOAD_DIRECTORY.mkdir(parents=True, exist_ok=True)
 
-COOKIE_FILE = os.getenv("YTDLP_COOKIE_FILE")
+
+def resolve_cookie_file(base_dir: Optional[Path] = None) -> Optional[str]:
+    """Resolve a usable yt-dlp cookie file for local and server environments."""
+    search_paths = []
+
+    env_cookie = os.getenv("YTDLP_COOKIE_FILE")
+    if env_cookie:
+        search_paths.append(Path(env_cookie))
+
+    if base_dir is None:
+        base_dir = Path(__file__).resolve().parents[1]
+
+    search_paths.extend(
+        [
+            base_dir / "cookies.txt",
+            Path.cwd() / "cookies.txt",
+            Path(__file__).resolve().parent.parent / "cookies.txt",
+        ]
+    )
+
+    for candidate in search_paths:
+        if not candidate:
+            continue
+
+        try:
+            resolved = candidate if candidate.is_absolute() else (base_dir / candidate).resolve()
+        except Exception:
+            resolved = candidate
+
+        if resolved.exists():
+            return str(resolved)
+
+    return None
+
 
 # ---------------------------
 # Download YouTube Audio
@@ -24,18 +58,14 @@ def download_youtube_audio(url: str) -> str:
     ydl_opts = {
         "format": "bestaudio/best",
         "outtmpl": output_template,
-
         "noplaylist": True,
         "quiet": False,
         "no_warnings": False,
-
         "retries": 15,
         "fragment_retries": 15,
         "extractor_retries": 10,
         "socket_timeout": 120,
-
         "geo_bypass": True,
-
         "extractor_args": {
             "youtube": {
                 "player_client": [
@@ -45,7 +75,6 @@ def download_youtube_audio(url: str) -> str:
                 ]
             }
         },
-
         "http_headers": {
             "User-Agent":
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -53,7 +82,6 @@ def download_youtube_audio(url: str) -> str:
                 "(KHTML, like Gecko) "
                 "Chrome/138.0.0.0 Safari/537.36"
         },
-
         "postprocessors": [
             {
                 "key": "FFmpegExtractAudio",
@@ -63,22 +91,12 @@ def download_youtube_audio(url: str) -> str:
         ],
     }
 
-    # ----------------------------
-    # Cookie support
-    # ----------------------------
-
-    if COOKIE_FILE:
-        logging.info(f"Cookie file configured: {COOKIE_FILE}")
-
-        if os.path.exists(COOKIE_FILE):
-            logging.info("Cookie file found.")
-            ydl_opts["cookiefile"] = COOKIE_FILE
-        else:
-            logging.warning("Cookie file NOT found.")
+    cookie_file = resolve_cookie_file()
+    if cookie_file:
+        logging.info("Using cookie file: %s", cookie_file)
+        ydl_opts["cookiefile"] = cookie_file
     else:
-        logging.info("No cookie file configured.")
-
-        # Local development only
+        logging.info("No cookie file found; attempting browser-cookie fallback on local machines.")
         if os.name == "nt":
             try:
                 ydl_opts["cookiesfrombrowser"] = ("chrome",)
@@ -88,101 +106,21 @@ def download_youtube_audio(url: str) -> str:
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-
             info = ydl.extract_info(url, download=True)
-
             downloaded = ydl.prepare_filename(info)
-
             wav_path = os.path.splitext(downloaded)[0] + ".wav"
 
             if not os.path.exists(wav_path):
-                raise FileNotFoundError(
-                    f"WAV file not found: {wav_path}"
-                )
+                raise FileNotFoundError(f"WAV file not found: {wav_path}")
 
             logging.info("Download successful.")
-
             return wav_path
 
     except Exception as e:
         logging.exception("yt-dlp failed")
-
         raise RuntimeError(
             "Unable to download YouTube audio.\n\n"
             f"{str(e)}"
-        )
-    logging.info("Downloading YouTube audio...")
-
-    output_template = str(DOWNLOAD_DIRECTORY / "%(title)s.%(ext)s")
-
-    ydl_opts = {
-        "format": "bestaudio/best",
-        "outtmpl": output_template,
-        "noplaylist": True,
-        "quiet": False,
-        "no_warnings": False,
-        "retries": 10,
-        "fragment_retries": 10,
-        "socket_timeout": 60,
-        "geo_bypass": True,
-        "concurrent_fragment_downloads": 4,
-        "extractor_retries": 5,
-
-        # Better extraction strategy
-        "extractor_args": {
-            "youtube": {
-                "player_client": [
-                    "android",
-                    "web",
-                    "tv"
-                ]
-            }
-        },
-
-        "http_headers": {
-            "User-Agent":
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 "
-                "(KHTML, like Gecko) "
-                "Chrome/138.0.0.0 Safari/537.36"
-        },
-
-        "postprocessors": [
-            {
-                "key": "FFmpegExtractAudio",
-                "preferredcodec": "wav",
-                "preferredquality": "192",
-            }
-        ],
-    }
-
-    # Optional cookie support
-    if COOKIE_FILE and os.path.exists(COOKIE_FILE):
-        logging.info("Using cookie file: %s", COOKIE_FILE)
-        ydl_opts["cookiefile"] = COOKIE_FILE
-    else:
-        logging.info("No cookie file configured.")
-
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-
-            downloaded = ydl.prepare_filename(info)
-            wav_path = os.path.splitext(downloaded)[0] + ".wav"
-
-            if not os.path.exists(wav_path):
-                raise FileNotFoundError(
-                    f"WAV file not found after download: {wav_path}"
-                )
-
-            logging.info("Downloaded successfully.")
-
-            return wav_path
-
-    except Exception as e:
-        logging.exception("YouTube download failed")
-        raise RuntimeError(
-            f"Unable to download YouTube video.\n\n{e}"
         )
 
 

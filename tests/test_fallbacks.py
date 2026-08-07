@@ -2,6 +2,7 @@ import os
 
 from core.extractor import extract_action_items, extract_key_decisions, extract_questions
 from core.summarize import generate_title, summarize
+from utils.audio_processor import resolve_cookie_file
 
 
 def test_summarize_and_title_fallback_without_mistral(monkeypatch):
@@ -37,3 +38,14 @@ def test_extraction_fallback_without_mistral(monkeypatch):
     assert action_items
     assert decisions
     assert questions
+
+
+def test_resolve_cookie_file_falls_back_to_repo_cookie(tmp_path, monkeypatch):
+    monkeypatch.delenv("YTDLP_COOKIE_FILE", raising=False)
+
+    cookie_path = tmp_path / "cookies.txt"
+    cookie_path.write_text("# test cookie", encoding="utf-8")
+
+    resolved = resolve_cookie_file(base_dir=tmp_path)
+
+    assert resolved == str(cookie_path.resolve())
