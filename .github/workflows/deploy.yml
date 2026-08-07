@@ -10,6 +10,7 @@ permissions:
   contents: read
 
 env:
+  ACR_NAME: ragvideoagentacr
   REGISTRY: ragvideoagentacr.azurecr.io
   IMAGE_NAME: rag-video-agent
   WEBAPP_NAME: rag-video-agent
@@ -20,10 +21,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Azure Login
+      - name: Azure Login (OIDC)
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
@@ -32,29 +33,25 @@ jobs:
 
       - name: Login to Azure Container Registry
         run: |
-          echo "${{ secrets.ACR_PASSWORD }}" | docker login ragvideoagentacr.azurecr.io \
-          --  username "${{ secrets.ACR_USERNAME }}" \
-          --password-stdin
+          az acr login --name $ACR_NAME
 
-      - name: Build Docker Image
+      - name: Build Docker image
         run: |
           docker build -t $REGISTRY/$IMAGE_NAME:latest .
 
-      - name: Push Docker Image
+      - name: Push Docker image
         run: |
           docker push $REGISTRY/$IMAGE_NAME:latest
 
-      - name: Configure Web App Container
+      - name: Configure App Service
         run: |
           az webapp config container set \
             --name $WEBAPP_NAME \
             --resource-group $RESOURCE_GROUP \
             --container-image-name $REGISTRY/$IMAGE_NAME:latest \
-            --container-registry-url https://$REGISTRY \
-            --container-registry-user ${{ secrets.ACR_USERNAME }} \
-            --container-registry-password ${{ secrets.ACR_PASSWORD }}
+            --container-registry-url https://$REGISTRY
 
-      - name: Restart Web App
+      - name: Restart App Service
         run: |
           az webapp restart \
             --name $WEBAPP_NAME \
