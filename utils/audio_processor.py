@@ -24,6 +24,100 @@ def download_youtube_audio(url: str) -> str:
     ydl_opts = {
         "format": "bestaudio/best",
         "outtmpl": output_template,
+
+        "noplaylist": True,
+        "quiet": False,
+        "no_warnings": False,
+
+        "retries": 15,
+        "fragment_retries": 15,
+        "extractor_retries": 10,
+        "socket_timeout": 120,
+
+        "geo_bypass": True,
+
+        "extractor_args": {
+            "youtube": {
+                "player_client": [
+                    "android",
+                    "tv_embedded",
+                    "web"
+                ]
+            }
+        },
+
+        "http_headers": {
+            "User-Agent":
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 "
+                "(KHTML, like Gecko) "
+                "Chrome/138.0.0.0 Safari/537.36"
+        },
+
+        "postprocessors": [
+            {
+                "key": "FFmpegExtractAudio",
+                "preferredcodec": "wav",
+                "preferredquality": "192",
+            }
+        ],
+    }
+
+    # ----------------------------
+    # Cookie support
+    # ----------------------------
+
+    if COOKIE_FILE:
+        logging.info(f"Cookie file configured: {COOKIE_FILE}")
+
+        if os.path.exists(COOKIE_FILE):
+            logging.info("Cookie file found.")
+            ydl_opts["cookiefile"] = COOKIE_FILE
+        else:
+            logging.warning("Cookie file NOT found.")
+    else:
+        logging.info("No cookie file configured.")
+
+        # Local development only
+        if os.name == "nt":
+            try:
+                ydl_opts["cookiesfrombrowser"] = ("chrome",)
+                logging.info("Using Chrome cookies.")
+            except Exception:
+                pass
+
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+
+            info = ydl.extract_info(url, download=True)
+
+            downloaded = ydl.prepare_filename(info)
+
+            wav_path = os.path.splitext(downloaded)[0] + ".wav"
+
+            if not os.path.exists(wav_path):
+                raise FileNotFoundError(
+                    f"WAV file not found: {wav_path}"
+                )
+
+            logging.info("Download successful.")
+
+            return wav_path
+
+    except Exception as e:
+        logging.exception("yt-dlp failed")
+
+        raise RuntimeError(
+            "Unable to download YouTube audio.\n\n"
+            f"{str(e)}"
+        )
+    logging.info("Downloading YouTube audio...")
+
+    output_template = str(DOWNLOAD_DIRECTORY / "%(title)s.%(ext)s")
+
+    ydl_opts = {
+        "format": "bestaudio/best",
+        "outtmpl": output_template,
         "noplaylist": True,
         "quiet": False,
         "no_warnings": False,
