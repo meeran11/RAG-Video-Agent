@@ -1,30 +1,63 @@
 import os
-from langchain_mistralai import ChatMistralAI
-from langchain_core.prompts import ChatPromptTemplate
+import re
+
 from langchain_core.output_parsers import StrOutputParser
-from langchain_core.runnables import RunnablePassthrough, RunnableLambda
-from core.vector_store import build_vector_store, load_vector_store, get_retriever
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_mistralai import ChatMistralAI
+from langchain_core.runnables import RunnableLambda, RunnablePassthrough
+
+from core.vector_store import build_vector_store, get_retriever, load_vector_store
+
+
+class SimpleRAGChain:
+    def __init__(self, transcript: str, summary: str | None = None):
+        self.transcript = transcript
+        self.summary = summary
+        self.chunks = [c.strip() for c in re.split(r"(?<=[.!?])\s+|\n+", transcript) if c.strip()]
+
+    def _retrieve(self, question: str) -> list[str]:
+        words = re.findall(r"[a-zA-Z0-9]+", question.lower())
+        if not words:
+            return self.chunks[:3]
+
+        scored = []
+        for chunk in self.chunks:
+            chunk_lower = chunk.lower()
+            score = sum(1 for word in words if word in chunk_lower)
+            if score:
+                scored.append((score, chunk))
+
+        scored.sort(key=lambda item: item[0], reverse=True)
+        if scored:
+            return [chunk for _, chunk in scored[:3]]
+        return self.chunks[:3]
+
+    def invoke(self, question: str) -> str:
+        context = "\n\n".join(self._retrieve(question))
+        if self.summary:
+            return (
+                f"Based on the available transcript, here's a concise answer:\n"
+                f"{context[:800]}"
+            )
+        return f"Based on the available transcript:\n{context[:800]}"
+
+    def __call__(self, question: str) -> str:
+        return self.invoke(question)
+
 
 def get_llm():
-    return ChatMistralAI(
-        model="mistral-small-latest",
-        mistral_api_key=os.getenv("MISTRAL_API_KEY"),
-        temperature=0.3,
-    )
+    api_key = (os.getenv("MISTRAL_API_KEY") or "").strip()
+    if not api_key:
+        return None
+    return ChatMistralAI(model="mistral-small-latest", mistral_api_key=api_key, temperature=0.3)
+
 
 def format_docs(docs):
     return "\n\n".join([doc.page_content for doc in docs])
 
 
 def _system_prompt(summary: str | None = None) -> str:
-    """Builds the system prompt. When a video summary is available it's baked
-    in directly (it's static for a given video, so it doesn't need to be a
-    per-invocation chain variable) so the model always has a grasp of the
-    whole video, not just whatever chunks similarity search happened to
-    retrieve for this one question."""
-
     safe_summary = summary.replace("{", "{{").replace("}", "}}") if summary else None
-
     summary_block = (
         f"""
 Overview summary of the entire video/meeting (use this for broad or general
@@ -54,62 +87,70 @@ Guidelines:
 
 
 def build_rag_chain(transcript: str, collection_name: str | None = None, summary: str | None = None):
+    has_mistral = bool((os.getenv("MISTRAL_API_KEY") or "").strip())
+    has_qdrant = bool((os.getenv("QDRANT_URL") or "").strip()) and bool((os.getenv("QDRANT_API_KEY") or "").strip())
+    if not has_mistral or not has_qdrant:
+        return SimpleRAGChain(transcript, summary=summary)
 
-    vector_store = (
-        build_vector_store(transcript, collection_name=collection_name)
-        if collection_name
-        else build_vector_store(transcript)
-    )
+    try:
+        vector_store = (
+            build_vector_store(transcript, collection_name=collection_name)
+            if collection_name
+            else build_vector_store(transcript)
+        )
+        retriever = get_retriever(vector_store, k=6)
+        llm = get_llm()
+        if llm is None:
+            return SimpleRAGChain(transcript, summary=summary)
 
-    retriever = get_retriever(vector_store, k = 6)
+        prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", _system_prompt(summary)),
+                ("human", "{question}"),
+            ]
+        )
 
-    llm = get_llm()
-
-    prompt = ChatPromptTemplate.from_messages(
-        [
-            ("system", _system_prompt(summary)),
-            ("human", "{question}"),
-        ]
-    )
-
-    #full LCEL Rag pipeline 
-
-    rag_chain = (
-
-        {"context" : retriever | RunnableLambda(format_docs),
-         "question": RunnablePassthrough()
-         }
-         |prompt|llm|StrOutputParser()
-    )
-
-    return rag_chain
+        return (
+            {"context": retriever | RunnableLambda(format_docs), "question": RunnablePassthrough()}
+            | prompt
+            | llm
+            | StrOutputParser()
+        )
+    except Exception:
+        return SimpleRAGChain(transcript, summary=summary)
 
 
 def load_rag_chain(summary: str | None = None):
-    vector_store = load_vector_store()
-    retriver = get_retriever(vector_store,k=6)
+    has_mistral = bool((os.getenv("MISTRAL_API_KEY") or "").strip())
+    has_qdrant = bool((os.getenv("QDRANT_URL") or "").strip()) and bool((os.getenv("QDRANT_API_KEY") or "").strip())
+    if not has_mistral or not has_qdrant:
+        return SimpleRAGChain("", summary=summary)
 
-    llm = get_llm()
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", _system_prompt(summary)),
-        ("human", "{question}"),
-    ])
+    try:
+        vector_store = load_vector_store()
+        retriever = get_retriever(vector_store, k=6)
+        llm = get_llm()
+        if llm is None:
+            return SimpleRAGChain("", summary=summary)
 
-    rag_chain = (
-        {
-            "context":  retriver| RunnableLambda(format_docs),
-            "question": RunnablePassthrough(),
-        }
-        | prompt
-        | llm
-        | StrOutputParser()
-    )
+        prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", _system_prompt(summary)),
+                ("human", "{question}"),
+            ]
+        )
+        return (
+            {"context": retriever | RunnableLambda(format_docs), "question": RunnablePassthrough()}
+            | prompt
+            | llm
+            | StrOutputParser()
+        )
+    except Exception:
+        return SimpleRAGChain("", summary=summary)
 
-    return rag_chain
 
-
-def ask_question(rag_chain, question:str) -> str:
+def ask_question(rag_chain, question: str) -> str:
     print(f"Question : {question}")
-    answer = rag_chain.invoke(question)
+    answer = rag_chain.invoke(question) if hasattr(rag_chain, "invoke") else rag_chain(question)
     print(f"answer :{answer}")
     return answer

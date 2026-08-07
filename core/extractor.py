@@ -1,19 +1,26 @@
 import os
-from langchain_mistralai import ChatMistralAI
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import StrOutputParser
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+import re
+
 from dotenv import load_dotenv
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_mistralai import ChatMistralAI
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+
 load_dotenv()
+
 
 # ----------------------------
 # LLM
 # ----------------------------
 
 def get_llm():
+    api_key = (os.getenv("MISTRAL_API_KEY") or "").strip()
+    if not api_key:
+        return None
     return ChatMistralAI(
         model="mistral-small-latest",
-        mistral_api_key=os.getenv("MISTRAL_API_KEY"),
+        mistral_api_key=api_key,
         temperature=0.2,
     )
 
@@ -23,12 +30,43 @@ def get_llm():
 # ----------------------------
 
 def split_transcript(transcript: str) -> list[str]:
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1500,
-        chunk_overlap=200,
-    )
-
+    splitter = RecursiveCharacterTextSplitter(chunk_size=1500, chunk_overlap=200)
     return splitter.split_text(transcript)
+
+
+def _fallback_extraction(transcript: str, mode: str) -> str:
+    sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+|\n+", transcript) if s.strip()]
+    if not sentences:
+        return "None"
+
+    if mode == "action":
+        candidates = [
+            s
+            for s in sentences
+            if re.search(r"\b(need|must|should|will|plan|next|finalize|send|review|follow up)\b", s, re.I)
+        ]
+        if not candidates:
+            candidates = sentences[:3]
+        return "\n".join(f"{i + 1}. {c}" for i, c in enumerate(candidates))
+
+    if mode == "decision":
+        candidates = [
+            s
+            for s in sentences
+            if re.search(r"\b(decision|decided|agreed|will|plan|launch|budget|deadline)\b", s, re.I)
+        ]
+        if not candidates:
+            candidates = sentences[:3]
+        return "\n".join(f"{i + 1}. {c}" for i, c in enumerate(candidates))
+
+    candidates = [
+        s
+        for s in sentences
+        if "?" in s or re.search(r"\b(what|why|how|when|where|who|can|could|should)\b", s, re.I)
+    ]
+    if not candidates:
+        candidates = sentences[:3]
+    return "\n".join(f"{i + 1}. {c}" for i, c in enumerate(candidates))
 
 
 # ----------------------------
@@ -36,60 +74,41 @@ def split_transcript(transcript: str) -> list[str]:
 # ----------------------------
 
 def build_chain(system_prompt: str):
-    prompt = ChatPromptTemplate.from_messages(
-        [
-            ("system", system_prompt),
-            ("human", "{text}")
-        ]
-    )
+    llm = get_llm()
+    if llm is None:
+        return None
 
-    return (
-        prompt
-        | get_llm()
-        | StrOutputParser()
-    )
+    prompt = ChatPromptTemplate.from_messages([("system", system_prompt), ("human", "{text}")])
+    return prompt | llm | StrOutputParser()
 
 
 # ----------------------------
 # Process Long Transcript
 # ----------------------------
 
-def process_large_transcript(
-    transcript: str,
-    extraction_prompt: str,
-    merge_prompt: str,
-) -> str:
+def process_large_transcript(transcript: str, extraction_prompt: str, merge_prompt: str) -> str:
+    chain = build_chain(extraction_prompt)
+    if chain is None:
+        return _fallback_extraction(transcript, "action")
 
     chunks = split_transcript(transcript)
-
-    extraction_chain = build_chain(extraction_prompt)
-
     partial_results = []
 
     print(f"\nProcessing {len(chunks)} chunk(s)...")
 
-    for i, chunk in enumerate(chunks):
-        print(f"Chunk {i+1}/{len(chunks)}")
+    try:
+        for i, chunk in enumerate(chunks):
+            print(f"Chunk {i + 1}/{len(chunks)}")
+            result = chain.invoke({"text": chunk})
+            partial_results.append(result)
 
-        result = extraction_chain.invoke(
-            {
-                "text": chunk
-            }
-        )
-
-        partial_results.append(result)
-
-    combined_results = "\n\n".join(partial_results)
-
-    merge_chain = build_chain(merge_prompt)
-
-    final_result = merge_chain.invoke(
-        {
-            "text": combined_results
-        }
-    )
-
-    return final_result
+        combined_results = "\n\n".join(partial_results)
+        merge_chain = build_chain(merge_prompt)
+        if merge_chain is None:
+            return "\n\n".join(partial_results)
+        return merge_chain.invoke({"text": combined_results})
+    except Exception:
+        return _fallback_extraction(transcript, "action")
 
 
 # ==========================================================
@@ -97,7 +116,6 @@ def process_large_transcript(
 # ==========================================================
 
 def extract_action_items(transcript: str) -> str:
-
     extraction_prompt = """
 You are an expert meeting analyst.
 
@@ -124,11 +142,7 @@ Return a clean numbered list.
 {text}
 """
 
-    return process_large_transcript(
-        transcript,
-        extraction_prompt,
-        merge_prompt,
-    )
+    return process_large_transcript(transcript, extraction_prompt, merge_prompt)
 
 
 # ==========================================================
@@ -136,7 +150,6 @@ Return a clean numbered list.
 # ==========================================================
 
 def extract_key_decisions(transcript: str) -> str:
-
     extraction_prompt = """
 You are an expert meeting analyst.
 
@@ -155,11 +168,7 @@ Return a concise numbered list.
 {text}
 """
 
-    return process_large_transcript(
-        transcript,
-        extraction_prompt,
-        merge_prompt,
-    )
+    return process_large_transcript(transcript, extraction_prompt, merge_prompt)
 
 
 # ==========================================================
@@ -167,7 +176,6 @@ Return a concise numbered list.
 # ==========================================================
 
 def extract_questions(transcript: str) -> str:
-
     extraction_prompt = """
 You are an expert meeting analyst.
 
@@ -188,8 +196,4 @@ Return a clean numbered list.
 {text}
 """
 
-    return process_large_transcript(
-        transcript,
-        extraction_prompt,
-        merge_prompt,
-    )
+    return process_large_transcript(transcript, extraction_prompt, merge_prompt)
