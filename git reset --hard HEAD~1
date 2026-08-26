@@ -1,0 +1,36 @@
+[33m9cdf5d5[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Streamlit frontend
+[33mdc187fc[m Cookies issue
+[33m9bda499[m Update audio processor
+[33mf462391[m Cookies issue
+[33m8b18c6d[m Cookies issue
+[33mf3a5e13[m Final Fix
+[33m83ca5e3[m Fix CORS origin
+[33mcd7cbed[m Fix yt-dlp cookie issue
+[33mf886132[m Fix
+[33m31a61d1[m Hello
+[33m87ec261[m Fix
+[33mad852fb[m Add root endpoint
+[33mf170c27[m Retry deployment after adding OIDC
+[33m3ef12cd[m Retry deployment after adding OIDC
+[33mf402583[m Hi
+[33m256943e[m Retry deployment
+[33m527d394[m Retry deployment
+[33mc2dedc9[m Fix
+[33m4598c8a[m Update deploy.yml
+[33m05b0de5[m Delete .github/workflows/test.yml
+[33m505da96[m Test.yml
+[33m950e968[m Add test workflow
+[33m0231505[m Remove old Azure deployment workflow
+[33mc7a7a4a[m DockerFile
+[33m3e4a2b1[m Delete .github/workflows/main_rag-video-agent-api.yml
+[33m8c2693e[m Add or update the Azure App Service build and deployment workflow config
+[33m134af47[m Hi
+[33m4f70116[m Replace openai-whisper with faster-whisper
+[33m00a9977[m Remove unused files
+[33mdfc3f82[m Connected Frontend and Backend
+[33m3d57629[m Frontend Design
+[33mcf961f8[m Make CLI non-interactive-safe and ignore local cache
+[33m46e9eb6[m :)
+[33m4745e00[m Complete Backend
+[33m18ed8fd[m Added summarizer to summarize the generated transcript
+[33mdb1a740[m First commit
