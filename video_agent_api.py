@@ -30,11 +30,6 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from utils.audio_processor import process_input
-from core.transcriber import transcribe_all
-from core.summarize import summarize, generate_title
-from core.extractor import extract_action_items, extract_key_decisions, extract_questions
-from core.rag_engine import build_rag_chain, ask_question
 
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -81,25 +76,82 @@ def public_video(video: dict) -> dict:
     return {k: v for k, v in video.items() if k not in ("rag_chain",)}
 
 
-def run_pipeline_for_video(video_id: str, source: str, translate: bool = False):
-    """Runs the full pipeline (transcribe -> summarize -> extract -> build RAG index)
-    in a background thread and updates VIDEOS[video_id] as it goes."""
+# def run_pipeline_for_video(video_id: str, source: str, translate: bool = False):
+#     """Runs the full pipeline (transcribe -> summarize -> extract -> build RAG index)
+#     in a background thread and updates VIDEOS[video_id] as it goes."""
+#     try:
+#         chunks = process_input(source)
+#         transcript = transcribe_all(chunks, translate=translate)
+
+#         title = generate_title(transcript)
+#         summary = summarize(transcript)
+#         action_items = extract_action_items(transcript)
+#         key_decisions = extract_key_decisions(transcript)
+#         open_questions = extract_questions(transcript)
+
+#         # Give each video its own Vector collection so answers don't leak
+#         # across different videos' content. Also pass the summary in so the
+#         # assistant can answer broad "what is this about" style questions,
+#         # not just ones that happen to match a retrieved transcript chunk.
+#         rag_chain = build_rag_chain(
+#             transcript, collection_name=f"video_{video_id}", summary=summary
+#         )
+
+#         with VIDEOS_LOCK:
+#             if video_id in VIDEOS:
+#                 VIDEOS[video_id].update(
+#                     {
+#                         "status": "ready",
+#                         "name": title or VIDEOS[video_id]["name"],
+#                         "title": title,
+#                         "summary": summary,
+#                         "action_items": action_items,
+#                         "key_decisions": key_decisions,
+#                         "open_questions": open_questions,
+#                         "rag_chain": rag_chain,
+#                     }
+#                 )
+#     except Exception as exc:  # noqa: BLE001 - want to surface any pipeline failure to the UI
+#         with VIDEOS_LOCK:
+#             if video_id in VIDEOS:
+#                 VIDEOS[video_id].update({"status": "error", "error": str(exc)})
+
+def run_pipeline_for_video(
+    video_id: str,
+    source: str,
+    translate: bool = False
+):
     try:
+        # Load heavy pipeline dependencies only when processing starts
+        from utils.audio_processor import process_input
+        from core.transcriber import transcribe_all
+        from core.summarize import summarize, generate_title
+        from core.extractor import (
+            extract_action_items,
+            extract_key_decisions,
+            extract_questions,
+        )
+        from core.rag_engine import build_rag_chain
+
         chunks = process_input(source)
-        transcript = transcribe_all(chunks, translate=translate)
+
+        transcript = transcribe_all(
+            chunks,
+            translate=translate
+        )
 
         title = generate_title(transcript)
+
         summary = summarize(transcript)
+
         action_items = extract_action_items(transcript)
         key_decisions = extract_key_decisions(transcript)
         open_questions = extract_questions(transcript)
 
-        # Give each video its own Vector collection so answers don't leak
-        # across different videos' content. Also pass the summary in so the
-        # assistant can answer broad "what is this about" style questions,
-        # not just ones that happen to match a retrieved transcript chunk.
         rag_chain = build_rag_chain(
-            transcript, collection_name=f"video_{video_id}", summary=summary
+            transcript,
+            collection_name=f"video_{video_id}",
+            summary=summary,
         )
 
         with VIDEOS_LOCK:
@@ -116,11 +168,16 @@ def run_pipeline_for_video(video_id: str, source: str, translate: bool = False):
                         "rag_chain": rag_chain,
                     }
                 )
-    except Exception as exc:  # noqa: BLE001 - want to surface any pipeline failure to the UI
+
+    except Exception as exc:
         with VIDEOS_LOCK:
             if video_id in VIDEOS:
-                VIDEOS[video_id].update({"status": "error", "error": str(exc)})
-
+                VIDEOS[video_id].update(
+                    {
+                        "status": "error",
+                        "error": str(exc)
+                    }
+                )
 
 def start_processing(video_id: str, source: str, translate: bool = False):
     thread = threading.Thread(
@@ -238,21 +295,42 @@ class ChatRequest(BaseModel):
 
 @app.post("/api/chat")
 async def chat(payload: ChatRequest):
+    from core.rag_engine import ask_question
+
     with VIDEOS_LOCK:
         video = VIDEOS.get(payload.videoId)
 
     if not video:
-        raise HTTPException(status_code=404, detail="Video not found")
+        raise HTTPException(
+            status_code=404,
+            detail="Video not found"
+        )
+
     if video["status"] == "processing":
-        raise HTTPException(status_code=409, detail="Video is still processing")
+        raise HTTPException(
+            status_code=409,
+            detail="Video is still processing"
+        )
+
     if video["status"] == "error":
-        raise HTTPException(status_code=422, detail=video.get("error") or "Video processing failed")
+        raise HTTPException(
+            status_code=422,
+            detail=video.get("error") or "Video processing failed"
+        )
 
     rag_chain = video.get("rag_chain")
-    if rag_chain is None:
-        raise HTTPException(status_code=422, detail="Video has no RAG index available")
 
-    answer = ask_question(rag_chain, payload.query)
+    if rag_chain is None:
+        raise HTTPException(
+            status_code=422,
+            detail="Video has no RAG index available"
+        )
+
+    answer = ask_question(
+        rag_chain,
+        payload.query
+    )
+
     return {"answer": answer}
 
 

@@ -1,7 +1,6 @@
-from faster_whisper import WhisperModel
 import os
 
-WHISPER_MODEL = (os.getenv("WHISPER_MODEL") or "small").strip().lower()
+WHISPER_MODEL = ("base").strip().lower()
 
 _model = None
 
@@ -10,10 +9,12 @@ def load_model():
     global _model
 
     if _model is None:
+        from faster_whisper import WhisperModel
+
         _model = WhisperModel(
             WHISPER_MODEL,
             device="cpu",
-            compute_type="int8"
+            compute_type="int8",
         )
 
     return _model
@@ -26,11 +27,12 @@ def transcribe_chunk(chunk_path: str, translate: bool = False) -> str:
 
     segments, info = model.transcribe(
         chunk_path,
-        beam_size=5,
-        task=task
+        beam_size=3,
+        task=task,
     )
 
     text = " ".join(segment.text for segment in segments)
+
     return text.strip()
 
 
